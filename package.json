@@ -1,0 +1,17 @@
+{
+  "name": "node-dns-relay",
+  "version": "0.0.1",
+  "description": "ERROR: No README.md file found!",
+  "main": "main.js",
+  "dependencies": {
+    "colors": "~0.6.0-1",
+    "native-dns": "~0.4.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": "",
+  "author": "Guo, Xing Hua",
+  "license": "BSD"
+}
