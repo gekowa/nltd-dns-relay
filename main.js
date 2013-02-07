@@ -1,8 +1,11 @@
 // var dgram = require("dgram");
 var crypto = require("crypto");
 var colors = require("colors");
+var fsCache = require("./fs-cache");
+var spawn = require('child_process').spawn;
 
 var CACHE = {};
+
 var computeHash = function(info) {
 		var src = JSON.stringify(info),
 			sha1Hash = crypto.createHash("sha1");
@@ -22,19 +25,26 @@ server.on('request', function(request, response) {
 	var cacheKey = computeHash(question);
 	// console.log(cacheKey);
 
-	if (CACHE[cacheKey] !== undefined) {
+	var cachedAnswer = fsCache.getSync(cacheKey);
+
+	if (cachedAnswer !== null) {
 		// use cache
 		console.log("serving from cache!");
-		var cachedItem = CACHE[cacheKey];
 
-		cachedItem.hits++;
-		console.log("cache hits " + cachedItem.hits);
+		cachedAnswer.hits++;
+		cachedAnswer.last = new Date();
 
-		cachedItem.answers.forEach(function(a) {
+		console.log("cache hits " + cachedAnswer.hits);
+
+		cachedAnswer.answers.forEach(function(a) {
 			response.answer.push(a);
 		});
 
 		response.send();
+
+		// set back with updated value
+		fsCache.set(cacheKey, cachedAnswer);
+
 		console.log(("Served by cache.").green);
 		console.log("Cached items: " + CACHE.length);
 	} else {
@@ -45,7 +55,7 @@ server.on('request', function(request, response) {
 				port: 53,
 				type: 'udp'
 			},
-			timeout: 5000,
+			timeout: 2000,
 			cache: false
 		});
 
@@ -63,12 +73,13 @@ server.on('request', function(request, response) {
 
 			response.send();
 
-			CACHE[cacheKey] = {
+			fsCache.set(cacheKey, {
 				"when": new Date(),
+				"last": new Date(),
 				"hits": 0,
 				"answers": answers
-			};
-			CACHE.length++;
+			});
+
 			console.log(("Served by upstream.").red);
 		});
 
@@ -84,3 +95,36 @@ CACHE.length = 0;
 
 server.serve(53);
 console.log(("NLTD DNS Relay Server started.").green);
+
+// do constant ping
+var ping = spawn('ping', ['172.25.4.21', '-t']);
+var pingResultStream = "";
+var skipped = 0;
+
+ping.stdout.on('data', function (data) {
+	var dataString = data.toString();
+	if (dataString.indexOf("\r\n") >= 0) {
+		// skip first 2 lines
+		if (skipped <= 2) {
+			skipped	++;
+			return;
+		}
+
+		pingResultStream += dataString;
+		var pingResult = pingResultStream;
+		pingResultStream = "";
+		// analyze
+		// console.log(pingResult);
+		if (/time\=\d+ms/.test(pingResult)) {
+			if (Math.random() > 0.75) {
+				console.log((">> DNS is working").green);
+			}
+		} else {
+			console.log((">> DNS is down").red);
+		}
+	} else {
+		pingResultStream += dataString;
+		// console.log("HALF ");
+	}
+	// console.log(data.toString()); // + "->" + data.toString().indexOf("\r\n"));
+});
